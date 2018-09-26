@@ -1,0 +1,247 @@
+/*
+    Copyright (C) 2007 Murad Tagirov <tmurad@gmail.com>
+    Copyright (C) 2007 Nikolas Zimmermann <zimmermann@kde.org>
+
+    This file is part of the KDE project
+
+    This library is free software you can redistribute it and/or
+    modify it under the terms of the GNU Library General Public
+    License as published by the Free Software Foundation either
+    version 2 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Library General Public License for more details.
+
+    You should have received a copy of the GNU Library General Public License
+    aint with this library see the file COPYING.LIB.  If not, write to
+    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+    Boston, MA 02110-1301, USA.
+*/
+
+#include "geodata/data/GeoDataDocument.h"
+#include "geodata/data/GeoDataDocument_p.h"
+
+#include "geodata/data/GeoDataFolder.h"
+#include "geodata/data/GeoDataPlacemark.h"
+#include "geodata/data/GeoDataStyle.h"
+#include "geodata/data/GeoDataStyleMap.h"
+#include "geodata/data/GeoDataSchema.h"
+
+#include "MarbleDebug.h"
+
+
+namespace Marble
+{
+
+GeoDataDocument::GeoDataDocument()
+    : GeoDataContainer( new GeoDataDocumentPrivate )
+{
+}
+
+GeoDataDocument::GeoDataDocument( const GeoDataDocument& other )
+    : GeoDocument(), GeoDataContainer( other )
+{
+}
+
+GeoDataDocument::~GeoDataDocument()
+= default;
+
+GeoDataDocumentPrivate* GeoDataDocument::p()
+{
+    return static_cast<GeoDataDocumentPrivate*>(d);
+}
+
+const GeoDataDocumentPrivate* GeoDataDocument::p() const
+{
+    return static_cast<GeoDataDocumentPrivate*>(d);
+}
+
+bool GeoDataDocument::operator==( const GeoDataDocument &other ) const
+{
+    if (!GeoDataContainer::equals(other)) {
+        return false;
+    }
+
+    if (!(p()->m_styleHash.size() == other.p()->m_styleHash.size() &&
+          p()->m_styleMapHash == other.p()->m_styleMapHash &&
+          p()->m_schemaHash == other.p()->m_schemaHash &&
+          p()->m_filename == other.p()->m_filename &&
+          p()->m_baseUri == other.p()->m_baseUri &&
+          p()->m_property == other.p()->m_property &&
+          p()->m_documentRole == other.p()->m_documentRole)) {
+        return false;
+    }
+
+    auto iter = p()->m_styleHash.constBegin();
+    auto const end = p()->m_styleHash.constEnd();
+    for (; iter != end; ++iter) {
+        if (!other.p()->m_styleHash.contains(iter.key())) {
+            return false;
+        }
+
+        if (*iter.value() != *other.p()->m_styleHash[iter.key()]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool GeoDataDocument::operator!=( const GeoDataDocument &other ) const
+{
+    return !this->operator==( other );
+}
+
+DocumentRole GeoDataDocument::documentRole() const
+{
+    return p()->m_documentRole;
+}
+
+void GeoDataDocument::setDocumentRole( DocumentRole role )
+{
+    p()->m_documentRole = role;
+}
+
+QString GeoDataDocument::property() const
+{
+    return p()->m_property;
+}
+
+void GeoDataDocument::setProperty( QString property )
+{
+    p()->m_property = property;
+}
+
+QString GeoDataDocument::fileName() const
+{
+    return p()->m_filename;
+}
+
+void GeoDataDocument::setFileName( const QString &value )
+{
+    detach();
+    p()->m_filename = value;
+}
+
+QString GeoDataDocument::baseUri() const
+{
+    return p()->m_baseUri;
+}
+
+void GeoDataDocument::setBaseUri( const QString &baseUrl )
+{
+    detach();
+    p()->m_baseUri = baseUrl;
+}
+
+
+void GeoDataDocument::addStyle( const GeoDataStyle::Ptr &style )
+{
+    detach();
+    p()->m_styleHash.insert( style->id(), style );
+    p()->m_styleHash[ style->id() ]->setParent( this );
+}
+
+void GeoDataDocument::removeStyle( const QString& styleId )
+{
+    detach();
+    p()->m_styleHash.remove( styleId );
+}
+
+GeoDataStyle::Ptr GeoDataDocument::style( const QString& styleId )
+{
+    /*
+     * FIXME: m_styleHash always should contain at least default
+     *        GeoDataStyle element
+     */
+    return p()->m_styleHash[ styleId ];
+}
+
+GeoDataStyle::ConstPtr
+GeoDataDocument::style( const QString &styleId ) const
+{
+    return p()->m_styleHash.value( styleId );
+}
+
+QList<GeoDataStyle::ConstPtr> GeoDataDocument::styles() const
+{
+    QList<GeoDataStyle::ConstPtr> result;
+    foreach(auto const & style, p()->m_styleHash.values()) {
+        result << style;
+    }
+
+    return result;
+}
+
+QList<GeoDataStyle::Ptr> GeoDataDocument::styles()
+{
+    detach();
+    return p()->m_styleHash.values();
+}
+
+void GeoDataDocument::addStyleMap( const GeoDataStyleMap& map )
+{
+    detach();
+    p()->m_styleMapHash.insert( map.id(), map );
+    p()->m_styleMapHash[ map.id() ].setParent( this );
+}
+
+void GeoDataDocument::removeStyleMap( const QString& mapId )
+{
+    detach();
+    p()->m_styleMapHash.remove( mapId );
+}
+
+GeoDataStyleMap& GeoDataDocument::styleMap( const QString& styleId )
+{
+    return p()->m_styleMapHash[ styleId ];
+}
+
+GeoDataStyleMap GeoDataDocument::styleMap( const QString &styleId ) const
+{
+    return p()->m_styleMapHash.value( styleId );
+}
+
+bool
+GeoDataDocument::hasStyleMap(const QString &styleId) const
+{
+    return p()->m_styleMapHash.contains(styleId);
+}
+
+QList<GeoDataStyleMap> GeoDataDocument::styleMaps() const
+{
+    return p()->m_styleMapHash.values();
+}
+
+void GeoDataDocument::addSchema( const GeoDataSchema& schema )
+{
+    detach();
+    p()->m_schemaHash.insert( schema.id(), schema );
+    p()->m_schemaHash[ schema.id() ].setParent( this );
+}
+
+void GeoDataDocument::removeSchema( const QString& schemaId )
+{
+    detach();
+    GeoDataSchema schema = p()->m_schemaHash.take( schemaId );
+    schema.setParent( nullptr );
+}
+
+GeoDataSchema GeoDataDocument::schema( const QString& schemaId ) const
+{
+    return p()->m_schemaHash.value( schemaId );
+}
+
+GeoDataSchema &GeoDataDocument::schema( const QString &schemaId )
+{
+    return p()->m_schemaHash[ schemaId ];
+}
+
+QList<GeoDataSchema> GeoDataDocument::schemas() const
+{
+    return p()->m_schemaHash.values();
+}
+
+}
